@@ -43,11 +43,11 @@ contract SwapApp {
 
     /*
     This function gets USDT funds:
-    1. Keeps half of the funds to add USDT liquidity.
-    2. Swaps the other half of the USDT to DAI.
-    3. Add liquidity.
+    1. Sends half of the funds to the contract to later add USDT liquidity.
+    2. Swaps the other half of the USDT to DAI, and send the given DAI to the contract.
+    3. Add liquidity to the USDT/DAI pool.
     */
-    function addLiquidiyToUsdtDaiFromUsdtFunds(
+    function addLiquidityToUsdtDaiFromUsdtFunds(
         uint256 totalUsdtToAdd_,
         uint256 usdtInForSwap_,
         uint256 daiOutMinForSwap_,
@@ -57,19 +57,21 @@ contract SwapApp {
         address USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
         address DAI = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
         
-        //1st step: Swap tokens. Only USDT is required to perform this operation.
+        //1st step: Swap tokens. Only USDT is required to add liquidity to the pool (DAI is obtained by swapping).
         // Send 1/2 of total USDT to this contract.
         uint256 usdtToAdd_ = totalUsdtToAdd_ / 2;
-        IERC20(USDT).transferFrom(msg.sender, address(this), usdtToAdd_);
+        IERC20(USDT).safeTransferFrom(msg.sender, address(this), usdtToAdd_);
 
-        // Use 1/2 of total USDT to Swap and get DAI in return.
+        // Use 1/2 of total USDT to Swap and get DAI in return. Then send that DAI to this contract.
         address[] memory path = new address[](2);
         path[0] = USDT;
         path[1] = DAI;
-        uint256 daiToAdd_ = swapTokens(usdtInForSwap_, daiOutMinForSwap_, path, deadline_);  // Got DAI in msg.sender
-        IERC20(DAI).transferFrom(msg.sender, address(this), daiToAdd_);  // Send DAI to this contract
+        uint256 daiToAdd_ = swapTokens(usdtInForSwap_, daiOutMinForSwap_, path, deadline_);  // Got DAI in msg.sender (we have to reuse swapTokens - better call swapExactTokensForTokens and return DAI to this contract directly)
+        IERC20(DAI).safeTransferFrom(msg.sender, address(this), daiToAdd_);  // Send DAI to this contract
         
         // 2nd step: Add liquidity
+        IERC20(USDT).approve(v2Router02Address, usdtToAdd_);
+        IERC20(DAI).approve(v2Router02Address, daiToAdd_);
         (uint usdtAdded, uint daiAdded, uint newLiquidity) = IV2Router02(v2Router02Address).addLiquidity(
             USDT,
             DAI,
