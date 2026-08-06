@@ -3,18 +3,21 @@
 // To `fork-test` in Arbitrum run these commands in the terminal (test and coverage):
 // forge test -vvvv --fork-url https://arb1.arbitrum.io/rpc --match-test TEST_NAME
 // forge coverage --fork-url https://arb1.arbitrum.io/rpc
+// forge coverage --fork-url https://arb1.arbitrum.io/rpc --ir-minimum
 
 pragma solidity 0.8.34;
 
 import "forge-std/Test.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../src/SwapApp.sol";
+import "../src/interfaces/IUniswapV2Factory.sol";
 
 
 contract TestSwapApp is Test {
 
     SwapApp app;
     address v2Router02Address = 0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24;  // Uniswap Router used to swap tokens
+    address v2FactoryAddress = 0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9;  // Uniswap Factory used to read USDT/DAI
     address user = 0xa7A1fe8dDaDE572A76Cebd4c43B2c5ce38893Fde;  // Address with USDT in Arbitrum Mainnet
     address usdt = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;  // USDT smart contract address in Arbitrum Mainnet
     address dai = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;  // DAI smart contract address in Arbitrum Mainnet
@@ -54,6 +57,27 @@ contract TestSwapApp is Test {
         assert(usdtAfter == usdtBefore - amountIn);
         assert(daiAfter > daiBefore);
         assert(daiAfter - daiBefore > amountOutMin);
+
+        vm.stopPrank();
+    }
+
+    function testAddLiquidityToUsdtDaiWorksCorrectly() public {
+        vm.startPrank(user);
+
+        address usdtDaiPair_ = IUniswapV2Factory(v2FactoryAddress).getPair(usdt, dai);
+        uint256 liquidityPoolTokensBefore_ = IERC20(usdtDaiPair_).balanceOf(user);
+        uint256 usdtDecimals_ = 10 ** IERC20Metadata(usdt).decimals();
+        uint256 totalUsdtToAdd_ = 6 * usdtDecimals_;  // For Swap (3 USDT) and to add liquidity (3 USDT)
+        uint256 daiDecimals_ = 10 ** IERC20Metadata(dai).decimals();
+        uint256 daiToAdd_ = 3 * daiDecimals_;  // To add liquidity (3 DAI)
+        uint256 deadline_ = block.timestamp + 7 days;
+        IERC20(usdt).approve(address(app), totalUsdtToAdd_);  // Approve sending 6 USDT to the contract (3+3)
+        IERC20(dai).approve(address(app), daiToAdd_);
+
+        app.addLiquidityToUsdtDaiFromUsdtFunds(totalUsdtToAdd_, 0, deadline_);
+
+        uint256 liquidityPoolTokensAfter_ = IERC20(usdtDaiPair_).balanceOf(user);
+        assert(liquidityPoolTokensAfter_ > liquidityPoolTokensBefore_);
 
         vm.stopPrank();
     }

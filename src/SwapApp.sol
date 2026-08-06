@@ -49,7 +49,6 @@ contract SwapApp {
     */
     function addLiquidityToUsdtDaiFromUsdtFunds(
         uint256 totalUsdtToAdd_,
-        uint256 usdtInForSwap_,
         uint256 daiOutMinForSwap_,
         uint deadline_
     ) external {
@@ -66,7 +65,7 @@ contract SwapApp {
         address[] memory path = new address[](2);
         path[0] = USDT;
         path[1] = DAI;
-        uint256 daiToAdd_ = swapTokens(usdtInForSwap_, daiOutMinForSwap_, path, deadline_);  // Got DAI in msg.sender (we have to reuse swapTokens - better call swapExactTokensForTokens and return DAI to this contract directly)
+        uint256 daiToAdd_ = swapTokens(usdtToAdd_, daiOutMinForSwap_, path, deadline_);  // Got DAI in msg.sender (we have to reuse swapTokens - better call swapExactTokensForTokens and return DAI to this contract directly)
         IERC20(DAI).safeTransferFrom(msg.sender, address(this), daiToAdd_);  // Send DAI to this contract
         
         // 2nd step: Add liquidity
