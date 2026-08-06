@@ -23,7 +23,7 @@ contract TestSwapApp is Test {
     address dai = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;  // DAI smart contract address in Arbitrum Mainnet
 
     function setUp() public {
-        app = new SwapApp(v2Router02Address);
+        app = new SwapApp(v2Router02Address, v2FactoryAddress);
     }
 
     function testIsCorrectlyInitialized() public view {
@@ -81,5 +81,39 @@ contract TestSwapApp is Test {
 
         vm.stopPrank();
     }
+
+    function testRemoveLiquidityFromUsdtDaiWorksCorrectly() public {
+        vm.startPrank(user);
+
+        address usdtDaiPair_ = IUniswapV2Factory(v2FactoryAddress).getPair(usdt, dai);
+        uint256 liquidityPoolTokensBefore_ = IERC20(usdtDaiPair_).balanceOf(user);
+        uint256 usdtDecimals_ = 10 ** IERC20Metadata(usdt).decimals();
+        uint256 totalUsdtToAdd_ = 6 * usdtDecimals_;  // For Swap (3 USDT) and to add liquidity (3 USDT)
+        uint256 daiDecimals_ = 10 ** IERC20Metadata(dai).decimals();
+        uint256 daiToAdd_ = 3 * daiDecimals_;  // To add liquidity (3 DAI)
+        uint256 deadline_ = block.timestamp + 7 days;
+        IERC20(usdt).approve(address(app), totalUsdtToAdd_);  // Approve sending 6 USDT to the contract (3+3)
+        IERC20(dai).approve(address(app), daiToAdd_);
+
+        app.addLiquidityToUsdtDaiFromUsdtFunds(totalUsdtToAdd_, 0, deadline_);
+
+        uint256 liquidityPoolTokensAfter_ = IERC20(usdtDaiPair_).balanceOf(user);
+        assert(liquidityPoolTokensAfter_ > liquidityPoolTokensBefore_);
+        uint256 usdtBalanceBefore_ = IERC20(usdt).balanceOf(user);
+        uint256 daiBalanceBefore_ = IERC20(dai).balanceOf(user);
+        IERC20(usdtDaiPair_).approve(address(app), liquidityPoolTokensAfter_);
+
+        app.removeLiquidityFromUsdtDaiPool(liquidityPoolTokensAfter_, totalUsdtToAdd_/4, daiToAdd_/2, user);
+
+        uint256 liquidityPoolTokensAfterRemove_ = IERC20(usdtDaiPair_).balanceOf(user);
+        assert(liquidityPoolTokensAfterRemove_ == 0);
+
+        uint256 usdtBalanceAfter_ = IERC20(usdt).balanceOf(user);
+        uint256 daiBalanceAfter_ = IERC20(dai).balanceOf(user);
+        assert(usdtBalanceAfter_ > usdtBalanceBefore_);
+        assert(daiBalanceAfter_ > daiBalanceBefore_);
+
+        vm.stopPrank();
+    }    
 
 }

@@ -3,6 +3,7 @@
 pragma solidity 0.8.34;
 
 import "./interfaces/IV2Router02.sol";
+import "./interfaces/IUniswapV2Factory.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -11,12 +12,15 @@ contract SwapApp {
     using SafeERC20 for IERC20;
 
     address public v2Router02Address;
+    address public v2FactoryAddress;
 
     event SwapTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
     event UsdtDaiLiquidityAdded(uint usdtAdded, uint daiAdded, uint newLiquidity);
+    event UsdtDaiLiquidityRemoved(uint256 liquidity);
 
-    constructor(address v2Router02Address_) {
+    constructor(address v2Router02Address_, address v2FactoryAddress_) {
         v2Router02Address = v2Router02Address_;
+        v2FactoryAddress = v2FactoryAddress_;
     }
 
     function swapTokens(
@@ -83,6 +87,21 @@ contract SwapApp {
         );
 
         emit UsdtDaiLiquidityAdded(usdtAdded, daiAdded, newLiquidity);
+    }
+
+    function removeLiquidityFromUsdtDaiPool(uint256 liquidity, uint256 usdtMin_, uint256 daiMin_, address to_) external {
+
+        address USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
+        address DAI = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
+
+        uint256 deadline_ = block.timestamp + 1 days;
+        address pair = IUniswapV2Factory(v2FactoryAddress).getPair(USDT, DAI);
+        IERC20(pair).safeTransferFrom(msg.sender, address(this), liquidity);
+        IERC20(pair).approve(v2Router02Address, liquidity);
+
+        IV2Router02(v2Router02Address).removeLiquidity(USDT, DAI, liquidity, usdtMin_, daiMin_, to_, deadline_);
+
+        emit UsdtDaiLiquidityRemoved(liquidity);
     }
 
 }
